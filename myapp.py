@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+import requests
 import boto3
 import json
 from sqlalchemy.sql import func
@@ -12,6 +13,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:B0nnie7C
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+
 
 # Define your data model
 class Complaint(db.Model):
@@ -27,6 +29,9 @@ class Complaint(db.Model):
     category = db.Column(db.String(100))
     summary = db.Column(db.String)
     urgency = db.Column(db.Integer)
+    longitude = db.Column(db.Float)
+    latitude = db.Column(db.Float)
+
 
 # Initialize the NLP model client
 models = ["mistral.mistral-7b-instruct-v0:2", "anthropic.claude-3-sonnet-20240229-v1:0",
@@ -106,11 +111,33 @@ def get_complaint_info(complaint: str, modelId: str) -> tuple[int, str]:
     return -1, "Failed to process complaint"
 
 
+def get_geocode(address: str, api_key: str) -> tuple[float, float]:
+    base_url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {
+        "address": address,
+        "key": api_key
+    }
+
+    response = requests.get(base_url, params=params)
+    data = response.json()
+
+    if data["status"] == "OK":
+        # Extract latitude and longitude from the response
+        location = data["results"][0]["geometry"]["location"]
+        latitude = location["lat"]
+        longitude = location["lng"]
+        return latitude, longitude
+    else:
+        print("Geocoding request failed:", data["status"])
+        return 0, 0
+
+
 # Endpoint to submit data
 @app.route('/submit', methods=['POST'])
 def submit_data():
     data = request.json
     modelId = models[0]
+    latitude, longitude = get_geocode(data['address'], 'AIzaSyDa3XR-yUCXjf7QRLYuSDj1K6YNYNdGP4Q')
     try:
         urgency, summary = get_complaint_info(data['complaint_text'], modelId)
     except Exception as e:
@@ -123,7 +150,8 @@ def submit_data():
         first_name=data['first_name'],
         last_name=data['last_name'],
         address=data['address'],
-        #geocode=json.dumps(data['geocode']),
+        longitude=longitude,
+        latitude=latitude,
         email=data['email'],
         telephone=data['telephone'],
         category=data['category'],
@@ -189,4 +217,3 @@ if __name__ == '__main__':
     #         db.session.rollback()
     #         print("Error inserting default complaint:", e)
     app.run(host='0.0.0.0', port=5000, debug=True)
-
