@@ -2,11 +2,13 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import boto3
 import json
+from sqlalchemy.sql import func
+from sqlalchemy import DateTime
 
 app = Flask(__name__)
 
 # Configuration for your PostgreSQL database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://YOURUSER:YOURPASSWORD@YOUR_LAPTOP_IP/YOURDATABASE'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:B0nnie7Clyde@146.169.237.60/postgres'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -14,18 +16,18 @@ db = SQLAlchemy(app)
 
 # Define your data model
 class Complaint(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    full_complaint = db.Column(db.String(255))
-    timestamp = db.Column(db.String(50))
-    name = db.Column(db.String(50))
+    complaint_id = db.Column(db.Integer, primary_key=True)
+    complaint_text = db.Column(db.String)
+    #time_stamp = db.Column(db.DateTime, default=func.now())
+    title = db.Column(db.String(10))
+    first_name = db.Column(db.String(100))
+    last_name = db.Column(db.String(100))
     address = db.Column(db.String(255))
-    geocode = db.Column(db.String(50))
-    email = db.Column(db.String(255))
-    telephone = db.Column(db.String(50))
-    category = db.Column(db.String(50))
-    summary = db.Column(db.String(255))
+    email = db.Column(db.String(100))
+    telephone = db.Column(db.String(20))
+    category = db.Column(db.String(100))
+    summary = db.Column(db.String)
     urgency = db.Column(db.Integer)
-
 
 # Initialize the NLP model client
 models = ["mistral.mistral-7b-instruct-v0:2", "anthropic.claude-3-sonnet-20240229-v1:0",
@@ -34,8 +36,8 @@ models = ["mistral.mistral-7b-instruct-v0:2", "anthropic.claude-3-sonnet-2024022
 bedrock_runtime = boto3.client(
     service_name="bedrock-runtime",
     region_name="eu-west-3",
-    aws_access_key_id="YOUR_AWS_ACCESS_KEY_ID",
-    aws_secret_access_key="YOUR_AWS_SECRET_ACCESS_KEY"
+    aws_access_key_id="AKIA4MTWHQBQDC75SMWG",
+    aws_secret_access_key="vSk/yVJr2IaQeokZcb6tpBZdseoFX6QBtFpbHwqr"
 )
 
 
@@ -111,16 +113,18 @@ def submit_data():
     data = request.json
     modelId = models[0]
     try:
-        urgency, summary = get_complaint_info(data['full_complaint'], modelId)
+        urgency, summary = get_complaint_info(data['complaint_text'], modelId)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
     new_complaint = Complaint(
-        full_complaint=data['full_complaint'],
-        timestamp=data['timestamp'],
-        name=data['name'],
+        complaint_text=data['complaint_text'],
+        #time_stamp=data['time_stamp'],
+        title=data['title'],
+        first_name=data['first_name'],
+        last_name=data['last_name'],
         address=data['address'],
-        geocode=json.dumps(data['geocode']),
+        #geocode=json.dumps(data['geocode']),
         email=data['email'],
         telephone=data['telephone'],
         category=data['category'],
@@ -147,11 +151,11 @@ def submit_data():
 #
 #     result = [
 #         {
-#             "full_complaint": d.full_complaint,
+#             "complaint_text": d.complaint_text,
 #             "timestamp": d.timestamp,
 #             "name": d.name,
 #             "address": d.address,
-#             "geocode": json.loads(d.geocode),
+#           #  "geocode": json.loads(d.geocode),
 #             "email": d.email,
 #             "telephone": d.telephone,
 #             "category": d.category,
@@ -165,6 +169,25 @@ def submit_data():
 
 
 if __name__ == '__main__':
+    # with app.app_context():
+    #     try:
+    #         default_complaint = Complaint(
+    #             complaint_text="Default complaint text",
+    #             title="miss",
+    #             first_name="Default",
+    #             last_name="User",
+    #             address="Default Address",
+    #             email="default@example.com",
+    #             telephone="1234567890",
+    #             category="Default Category",
+    #             summary="Default summary",
+    #             urgency=1  # Default urgency
+    #         )
+    #         db.session.add(default_complaint)
+    #         db.session.commit()
+    #         print("Default complaint inserted successfully")
+    #     except Exception as e:
+    #         db.session.rollback()
+    #         print("Error inserting default complaint:", e)
     app.run(host='0.0.0.0', port=5000, debug=True)
-    #   app.run(debug=True)
 
