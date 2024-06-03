@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 import requests
 import boto3
@@ -6,10 +7,12 @@ import json
 from sqlalchemy.sql import func
 from sqlalchemy import DateTime
 
-app = Flask(__name__)
 
-# Configuration for your PostgreSQL database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:B0nnie7Clyde@146.169.237.60/postgres'
+app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+#Configuration for your PostgreSQL database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:B0nnie7Clyde@172.20.10.2/postgres'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -19,7 +22,7 @@ db = SQLAlchemy(app)
 class Complaint(db.Model):
     complaint_id = db.Column(db.Integer, primary_key=True)
     complaint_text = db.Column(db.String)
-    #time_stamp = db.Column(db.DateTime, default=func.now())
+    time_stamp = db.Column(db.DateTime)
     title = db.Column(db.String(10))
     first_name = db.Column(db.String(100))
     last_name = db.Column(db.String(100))
@@ -31,7 +34,6 @@ class Complaint(db.Model):
     urgency = db.Column(db.Integer)
     longitude = db.Column(db.Float)
     latitude = db.Column(db.Float)
-
 
 # Initialize the NLP model client
 models = ["mistral.mistral-7b-instruct-v0:2", "anthropic.claude-3-sonnet-20240229-v1:0",
@@ -59,7 +61,7 @@ Respond with the urgency level number as a single character, followed by a one-s
 ####
 Here is an example:
 Complaint: The community garden's watering system has developed a leak, causing water wastage and damaging the nearby path. It's essential to repair this issue promptly to prevent further damage and save water.
-4 
+4
 Leak in community garden's watering system.
 
 <<<
@@ -165,41 +167,63 @@ def submit_data():
     return jsonify({"message": "Complaint submitted successfully", "summary": summary, "urgency": urgency}), 200
 
 
-# Endpoint to retrieve data
-# @app.route('/data', methods=['GET'])
-# def get_data():
-#     filters = request.args
-#     query = Complaint.query
-#
-#     if 'category' in filters:
-#         query = query.filter(Complaint.category == filters['category'])
-#
-#     data = query.all()
-#
-#     result = [
-#         {
-#             "complaint_text": d.complaint_text,
-#             "timestamp": d.timestamp,
-#             "name": d.name,
-#             "address": d.address,
-#           #  "geocode": json.loads(d.geocode),
-#             "email": d.email,
-#             "telephone": d.telephone,
-#             "category": d.category,
-#             "summary": d.summary,
-#             "urgency": d.urgency
-#         }
-#         for d in data
-#     ]
+#Endpoint to retrieve data
+@app.route('/data', methods=['GET'])
+def get_data():
+    query = Complaint.query
+    data = query.all()
 
-#    return jsonify(result), 200
+    result = {
+        f"complaint{index + 1}": {
+            "full_complaint": d.complaint_text,
+            "timestamp": d.time_stamp.isoformat(),  # Convert timestamp to ISO format
+            "name": f"{d.first_name} {d.last_name}",
+            "address": d.address,
+            "geocode": [d.latitude, d.longitude],
+            "email": d.email,
+            "telephone": d.telephone,
+            "category": d.category,
+            "summary": d.summary,
+            "sentiment": str(d.urgency) # Assuming urgency is the sentiment
+        }
+        for index, d in enumerate(data)
+    }
+    # result = {
+    #     "complaint28": {
+    #         "full_complaint": "The footpath near my house is cracked and uneven.",
+    #         "timestamp": "2024-05-05T08:30:00Z",
+    #         "name": "Chloe Walker",
+    #         "address": "105 Maze Hill, SE10 9SW",
+    #         "geocode": [51.481, 0.003],
+    #         "email": "chloe.walker@example.com",
+    #         "telephone": "02096789012",
+    #         "category": "Footpath",
+    #         "summary": "Cracked and uneven footpath on Maze Hill.",
+    #         "sentiment": "3"
+    #     },
+    #     "complaint29": {
+    #         "full_complaint": "The street lights on my road are too bright.",
+    #         "timestamp": "2024-05-04T18:10:00Z",
+    #         "name": "Thomas Carter",
+    #         "address": "110 Greenwich High Rd, SE10 8JE",
+    #         "geocode": [51.478, -0.012],
+    #         "email": "thomas.carter@example.com",
+    #         "telephone": "02097890123",
+    #         "category": "Streetlight",
+    #         "summary": "Street lights on Greenwich High Rd are too bright.",
+    #         "sentiment": "3"
+    #     }
+    # }
+    #result = "hello"
+
+    return jsonify(result), 200
 
 
 if __name__ == '__main__':
     # with app.app_context():
     #     try:
     #         default_complaint = Complaint(
-    #             complaint_text="Default complaint text",
+    #             complaint_text="3rd June default complaint text",
     #             title="miss",
     #             first_name="Default",
     #             last_name="User",
