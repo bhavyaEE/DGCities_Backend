@@ -6,13 +6,16 @@ import boto3
 import json
 from sqlalchemy.sql import func
 from sqlalchemy import DateTime
+from datetime import timedelta
+
+
 
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 #Configuration for your PostgreSQL database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:B0nnie7Clyde@172.20.10.2/postgres'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:B0nnie7Clyde@146.169.235.36/postgres'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -22,7 +25,7 @@ db = SQLAlchemy(app)
 class Complaint(db.Model):
     complaint_id = db.Column(db.Integer, primary_key=True)
     complaint_text = db.Column(db.String)
-    time_stamp = db.Column(db.DateTime)
+    time_stamp = db.Column(db.DateTime, default=func.now())
     title = db.Column(db.String(10))
     first_name = db.Column(db.String(100))
     last_name = db.Column(db.String(100))
@@ -171,6 +174,23 @@ def submit_data():
 @app.route('/data', methods=['GET'])
 def get_data():
     query = Complaint.query
+    # Get filters from query parameters
+    urgency = request.args.get('urgency')
+    category = request.args.get('category')
+    age = request.args.get('age')
+
+    if urgency:
+        query = query.filter(Complaint.urgency == int(urgency))
+    if category:
+        query = query.filter(Complaint.category.ilike(f"%{category}%"))
+    if age:
+        try:
+            days = int(age)
+            cutoff_date = func.now() - timedelta(days=days)
+            query = query.filter(Complaint.time_stamp >= cutoff_date)
+        except ValueError:
+            pass
+
     data = query.all()
 
     result = {
@@ -188,34 +208,6 @@ def get_data():
         }
         for index, d in enumerate(data)
     }
-    # result = {
-    #     "complaint28": {
-    #         "full_complaint": "The footpath near my house is cracked and uneven.",
-    #         "timestamp": "2024-05-05T08:30:00Z",
-    #         "name": "Chloe Walker",
-    #         "address": "105 Maze Hill, SE10 9SW",
-    #         "geocode": [51.481, 0.003],
-    #         "email": "chloe.walker@example.com",
-    #         "telephone": "02096789012",
-    #         "category": "Footpath",
-    #         "summary": "Cracked and uneven footpath on Maze Hill.",
-    #         "sentiment": "3"
-    #     },
-    #     "complaint29": {
-    #         "full_complaint": "The street lights on my road are too bright.",
-    #         "timestamp": "2024-05-04T18:10:00Z",
-    #         "name": "Thomas Carter",
-    #         "address": "110 Greenwich High Rd, SE10 8JE",
-    #         "geocode": [51.478, -0.012],
-    #         "email": "thomas.carter@example.com",
-    #         "telephone": "02097890123",
-    #         "category": "Streetlight",
-    #         "summary": "Street lights on Greenwich High Rd are too bright.",
-    #         "sentiment": "3"
-    #     }
-    # }
-    #result = "hello"
-
     return jsonify(result), 200
 
 
