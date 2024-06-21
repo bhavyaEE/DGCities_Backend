@@ -39,8 +39,10 @@ class Complaint(db.Model):
     latitude = db.Column(db.Float)
 
 # Initialize the NLP model client
-models = ["mistral.mistral-7b-instruct-v0:2", "anthropic.claude-3-sonnet-20240229-v1:0",
+available_models = ["mistral.mistral-7b-instruct-v0:2", "anthropic.claude-3-sonnet-20240229-v1:0",
           "mistral.mixtral-8x7b-instruct-v0:1", "mistral.mistral-large-2402-v1:0"]
+
+chosen_model = available_models[2]
 
 bedrock_runtime = boto3.client(
     service_name="bedrock-runtime",
@@ -141,7 +143,7 @@ def get_geocode(address: str, api_key: str) -> tuple[float, float]:
 @app.route('/submit', methods=['POST'])
 def submit_data():
     data = request.json
-    modelId = models[0]
+    modelId = chosen_model
     latitude, longitude = get_geocode(data['address'], 'AIzaSyDa3XR-yUCXjf7QRLYuSDj1K6YNYNdGP4Q')
     try:
         urgency, summary = get_complaint_info(data['complaint_text'], modelId)
