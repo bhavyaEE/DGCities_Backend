@@ -54,21 +54,47 @@ bedrock_runtime = boto3.client(
 
 
 # Function to get the prompt for the NLP model
-def get_prompt(complaint: str) -> str:
-    prompt: str = f"""You are an assistant to the council, tasked with categorizing residents' complaints by urgency. Choose the urgency level of the resident complaint after <<<>>> into one of the following predefined categories. It is essential not to provide any explanation to your response:
+def get_prompt(complaint : str) -> str:
+    prompt : str = f"""You are an assistant to the council, tasked with categorizing residents' complaints by urgency and type. Choose the urgency level of the resident complaint after <<<>>> into one of the following predefined urgency categories and classify the complaint into one of the predefined types. It is essential not to provide any explanation to your response:
+
+Urgency Categories:
 
 1) No Urgency: No action required from council.
 2) Least Urgent: Complaint is not time-sensitive and not important but must eventually be addressed.
 3) Somewhat Urgent: Complaint is not time-sensitive but important.
 4) Urgent: Complaint is time-sensitive and must be addressed promptly.
 5) Incredibly Urgent: Complaint must be addressed immediately to ensure resident safety.
-Respond with the urgency level number as a single character, followed by a one-sentence summary of the complaint.
+
+Type Categories:
+
+- Adult social care
+- Business
+- Children's services
+- Communications, customer services or committees
+- Community safety
+- Council Tax and benefits
+- Environment, planning, parks, cemeteries and waste
+- GLLaB (Greenwich Local Labour and Business)
+- Highways, traffic and parking
+- Housing
+- Sports, leisure and libraries
+- Other
+
+Respond with the urgency level number as a single character, followed by a one-sentence summary of the complaint and the type category.
 
 ####
 Here is an example:
 Complaint: The community garden's watering system has developed a leak, causing water wastage and damaging the nearby path. It's essential to repair this issue promptly to prevent further damage and save water.
 4
 Leak in community garden's watering system.
+Environment, planning, parks, cemeteries and waste
+
+####
+Here is another example:
+Complaint: I have noticed a significant increase in the number of stray cats in my neighborhood. They are creating a mess in my garden and disturbing the peace with their constant noise at night.
+Increase in stray cats causing disturbances.
+3
+Other
 
 <<<
 Complaint: {complaint}
