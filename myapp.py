@@ -7,6 +7,8 @@ import json
 from sqlalchemy.sql import func
 from sqlalchemy import DateTime
 from datetime import timedelta
+from flask_migrate import Migrate
+
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -16,6 +18,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:B0nnie7C
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)  # Initialize Flask-Migrate
 
 
 # Define your data model
