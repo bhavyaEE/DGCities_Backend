@@ -8,14 +8,11 @@ from sqlalchemy.sql import func
 from sqlalchemy import DateTime
 from datetime import timedelta
 
-
-
-
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 #Configuration for your PostgreSQL database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:B0nnie7Clyde@146.169.235.36/postgres'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:B0nnie7Clyde@146.169.232.121/postgres'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -23,7 +20,7 @@ db = SQLAlchemy(app)
 
 # Define your data model
 class Complaint(db.Model):
-    complaint_id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     complaint_text = db.Column(db.String)
     time_stamp = db.Column(db.DateTime, default=func.now())
     title = db.Column(db.String(10))
@@ -37,6 +34,7 @@ class Complaint(db.Model):
     urgency = db.Column(db.Integer)
     longitude = db.Column(db.Float)
     latitude = db.Column(db.Float)
+
 
 # Initialize the NLP model client
 available_models = ["mistral.mistral-7b-instruct-v0:2", "anthropic.claude-3-sonnet-20240229-v1:0",
@@ -97,7 +95,7 @@ def get_kwargs(complaint: str, modelId: str) -> dict:
 
 
 # Function to call NLP model and get complaint info
-def get_complaint_info(complaint: str, modelId: str) -> tuple[int, str]:
+def get_complaint_info(complaint: str, modelId: str) -> tuple[int, str, str]:
     kwargs: dict = get_kwargs(complaint, modelId)
     max_attempts = 5
     attempts = 0
@@ -107,15 +105,23 @@ def get_complaint_info(complaint: str, modelId: str) -> tuple[int, str]:
             response = bedrock_runtime.invoke_model(**kwargs)
             response_body = json.loads(response.get('body').read())
             text = response_body['outputs'][0]['text'].strip()
-            urgency = int(text[0])
-            summary = text[1:].strip()
-            summary = summary[:summary.find('\n')]
-            return urgency, summary
+            urgency: int = int(text[0])
+            text: str = text[1:].strip()
+            split_index: int = text.find('\n')
+            summary: str = text[:split_index]
+            category: str = text[split_index + 1:]
+            newline_index = category.find('\n')
+            if newline_index != -1:
+                category = category[:newline_index]
+            if category[-1] == '.':
+                print(category)
+                category = category[:-1]
+            return urgency, summary, category
         except (ValueError, KeyError, IndexError):
             attempts += 1
             if attempts >= max_attempts:
                 raise Exception(f"Failed to get complaint info after {max_attempts} attempts")
-    return -1, "Failed to process complaint"
+    return -1, "Failed to process complaint", "failed category"
 
 
 def get_geocode(address: str, api_key: str) -> tuple[float, float]:
@@ -146,16 +152,16 @@ def submit_data():
     modelId = chosen_model
     latitude, longitude = get_geocode(data['address'], 'AIzaSyDa3XR-yUCXjf7QRLYuSDj1K6YNYNdGP4Q')
     try:
-        urgency, summary = get_complaint_info(data['complaint_text'], modelId)
+        urgency, summary, category = get_complaint_info(data['complaintBody'], modelId)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
     new_complaint = Complaint(
-        complaint_text=data['complaint_text'],
+        complaint_text=data['complaintBody'],
         #time_stamp=data['time_stamp'],
         title=data['title'],
-        first_name=data['first_name'],
-        last_name=data['last_name'],
+        first_name=data['firstName'],
+        last_name=data['surname'],
         address=data['address'],
         longitude=longitude,
         latitude=latitude,
@@ -206,32 +212,46 @@ def get_data():
             "telephone": d.telephone,
             "category": d.category,
             "summary": d.summary,
-            "sentiment": str(d.urgency) # Assuming urgency is the sentiment
+            "sentiment": str(d.urgency)  # Assuming urgency is the sentiment
         }
         for index, d in enumerate(data)
     }
     return jsonify(result), 200
 
 
+#endpoint for analytics
+@app.route('/analytics', methods=['GET'])
+def get_analytics():
+    complaint_counts = db.session.query(
+        Complaint.category, func.count(Complaint.complaint_id).label('count')
+    ).group_by(Complaint.category).all()
+
+    if not complaint_counts:
+        return jsonify({"message": "No complaints found"}), 200
+
+    max_complaints_category = max(complaint_counts, key=lambda x: x[1])
+    min_complaints_category = min(complaint_counts, key=lambda x: x[1])
+
+    fixed_categories = ["Adult Social Care", "Business", "Children's Services"]
+    complaints_per_category = {category: 0 for category in fixed_categories}
+
+    for category, count in complaint_counts:
+        if category in complaints_per_category:
+            complaints_per_category[category] = count
+
+    complaints_array = [complaints_per_category[category] for category in fixed_categories]
+
+    total_complaints = db.session.query(func.count(Complaint.complaint_id)).scalar()
+
+    result = {
+        "total_complaints": total_complaints,
+        "cat_most": max_complaints_category[0],
+        "cat_least": min_complaints_category[0],
+        "catPCdata": complaints_array
+    }
+
+    return jsonify(result), 200
+
+
 if __name__ == '__main__':
-    # with app.app_context():
-    #     try:
-    #         default_complaint = Complaint(
-    #             complaint_text="3rd June default complaint text",
-    #             title="miss",
-    #             first_name="Default",
-    #             last_name="User",
-    #             address="Default Address",
-    #             email="default@example.com",
-    #             telephone="1234567890",
-    #             category="Default Category",
-    #             summary="Default summary",
-    #             urgency=1  # Default urgency
-    #         )
-    #         db.session.add(default_complaint)
-    #         db.session.commit()
-    #         print("Default complaint inserted successfully")
-    #     except Exception as e:
-    #         db.session.rollback()
-    #         print("Error inserting default complaint:", e)
     app.run(host='0.0.0.0', port=5000, debug=True)
